@@ -1,0 +1,121 @@
+{
+  "name": "agent-terminal-launcher",
+  "displayName": "Agent Terminal Launcher",
+  "description": "One-click button that opens a right-side terminal and runs a configurable agent CLI.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DennisCheong/vscode-agent-terminal-launcher.git"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "private": true,
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:agentTerminal.start"
+  ],
+  "main": "./extension.js",
+  "scripts": {
+    "build": "vsce package --out dist/agent-terminal-launcher.vsix",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.6.0"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "Agent Terminal Launcher",
+      "properties": {
+        "agentTerminal.terminalName": {
+          "type": "string",
+          "default": "Agent",
+          "description": "Base terminal tab name used for launched agent sessions."
+        },
+        "agentTerminal.activeProfile": {
+          "type": "string",
+          "default": "",
+          "description": "Profile name to preselect when the launcher dropdown opens."
+        },
+        "agentTerminal.profiles": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "Profile definitions keyed by profile name. Each value is an object that can include `label`, `description`, `command`, `args`, `cwd`, `env`, `terminalName`, or legacy `commandLine`.",
+          "additionalProperties": {
+            "type": "object",
+            "default": {},
+            "properties": {
+              "label": {
+                "type": "string",
+                "default": "",
+                "description": "Label shown in the picker."
+              },
+              "description": {
+                "type": "string",
+                "default": "",
+                "description": "Optional detail text shown in the picker."
+              },
+              "command": {
+                "type": "string",
+                "default": "",
+                "description": "Executable to run in the terminal."
+              },
+              "args": {
+                "type": "array",
+                "default": [],
+                "items": {
+                  "type": "string"
+                },
+                "description": "Arguments passed to the executable."
+              },
+              "cwd": {
+                "type": "string",
+                "default": "",
+                "description": "Working directory for the terminal."
+              },
+              "env": {
+                "type": "object",
+                "default": {},
+                "description": "Environment variables set for the terminal session.",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "terminalName": {
+                "type": "string",
+                "default": "",
+                "description": "Custom terminal tab name."
+              },
+              "commandLine": {
+                "type": "string",
+                "default": "",
+                "description": "Legacy raw command line string for backward compatibility."
+              }
+            }
+          }
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "agentTerminal.start",
+        "title": "Start Agent Terminal",
+        "category": "Agent",
+        "icon": "$(terminal)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "agentTerminal.start",
+          "when": "resourceScheme == 'file' || resourceScheme == 'untitled' || resourceScheme == 'vscode-terminal'",
+          "group": "navigation@0"
+        }
+      ]
+    }
+  }
+}

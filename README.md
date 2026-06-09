@@ -1,87 +1,66 @@
 # Agent Terminal Launcher
 
-VS Code extension that adds a button in the editor title bar. Clicking it opens a profile picker from VS Code Settings, then launches the chosen agent CLI in a terminal editor to the right, reusing the existing right-side terminal tab group when one is already open.
+VS Code extension for launching agent CLIs such as `codex`, `claude`, or `opencode` in a right-side terminal editor. It keeps launch profiles, terminal behavior, and file reference commands in one visual settings panel.
 
 ## What it does
 
-- Adds `Agent: Start Agent Terminal` to the Command Palette.
-- Adds a single button in the editor title bar for regular files, untitled files, and terminal editors.
-- Opens a profile dropdown from VS Code Settings.
-- Includes an `Open Settings` item in the dropdown so you can jump straight to the extension settings.
-- Opens a terminal in the editor area to the side and sends the selected profile command immediately.
-- Reuses the existing right-side terminal tab group when one already exists, so repeated launches create new tabs in the same group.
+- Launches configurable agent CLI profiles such as `codex`, `claude`, or `opencode` from the editor title bar or Command Palette.
+- Opens agent sessions in a right-side terminal editor and reuses the existing right-side terminal tab group when possible.
+- Lets you choose a launch profile from a dropdown before starting the terminal.
+- Provides a visual profile manager for editing launcher profiles without hand-editing JSON.
+- Supports separate user-level and workspace-level launcher settings.
+- Sends the current file path or selected line range to an active agent terminal for quick file references.
 
 ## Configuration
 
-Open VS Code Settings and search for `Agent Terminal Launcher`, or use the `Open Settings` item from the launcher dropdown.
+All launcher settings are managed from the visual profile manager. Open it from either:
 
-Settings section:
+- the `Open Agent Terminal Settings` command
+- the launcher dropdown item `Manage Profiles`
+- the editor title bar edit button
 
-- `agentTerminal.terminalName`: base terminal tab name used for launched agent sessions
-- `agentTerminal.activeProfile`: profile name to preselect when the launcher dropdown opens
-- `agentTerminal.profiles`: profile definitions keyed by profile name
+The top settings section controls:
 
-Example `settings.json`:
+- switching between `User settings` and `Workspace settings`
+- setting the base terminal name
+- choosing the active default profile
 
-```json
-{
-  "agentTerminal.terminalName": "Agent",
-  "agentTerminal.activeProfile": "codex",
-  "agentTerminal.profiles": {
-    "codex": {
-      "label": "Codex",
-      "description": "OpenAI Codex",
-      "command": "codex",
-      "args": [
-        "chat",
-        "--model",
-        "gpt-5.4-mini"
-      ],
-      "cwd": ".",
-      "env": {
-        "OPENAI_API_KEY": "your-api-key"
-      }
-    },
-    "claude": {
-      "label": "Claude",
-      "description": "Anthropic Claude",
-      "command": "claude",
-      "args": [
-        "--dangerously-skip-permissions"
-      ],
-      "cwd": ".",
-      "env": {
-        "ANTHROPIC_API_KEY": "your-api-key"
-      }
-    },
-    "opencode": {
-      "label": "OpenCode",
-      "description": "OpenCode",
-      "command": "opencode",
-      "args": [],
-      "cwd": ".",
-      "env": {}
-    }
-  }
-}
-```
+Profile settings are edited as cards:
 
-Supported profile fields:
+- use `New Profile` to create a profile from a popup form
+- edit `name`, `label`, `description`, `command`, `args`, `cwd`, `env`, `terminalName`, and legacy `commandLine` directly inside each profile card
+- use `Save Profile` to save only the card you changed
+- use `Delete Profile` to remove that profile
 
-- `command`: executable to run
-- `args`: array of arguments
+Keyboard shortcuts are managed by VS Code:
+
+- use the built-in `Keyboard Shortcuts` section to open VS Code's native keybinding UI
+- this extension does not contribute default shortcuts, so reinstalling the VSIX will not reset user keybindings
+
+## Profile Fields
+
+- `name`: settings key used for the profile
+- `label`: display name shown in the launcher picker
+- `description`: optional picker description
+- `command`: executable to run directly in the terminal
+- `args`: command arguments, one line per argument in the visual editor
 - `cwd`: working directory, relative to the workspace if not absolute
-- `env`: environment variables to set for the terminal session
-- `label`: label shown in the picker
-- `description`: optional details shown in the picker
+- `env`: environment variables, one `KEY=value` pair per line in the visual editor
 - `terminalName`: optional fixed terminal tab name
-- `commandLine`: legacy raw command line string for backward compatibility
+- `commandLine`: legacy raw command line for compatibility
+
+## Referencing Files
+
+- `Agent: Reference Current File or Selection` sends the active file path, or `file#L10-L25` when text is selected, to the currently active terminal. If no terminal is focused, it falls back to the last terminal launched by this extension.
+- `Agent: Reference Current File` always sends the whole active file.
+- If no agent terminal is open yet, the extension prompts you to start one first.
+- The command sends only the raw reference string. It does not prepend any extra prompt text.
 
 ## Development
 
 1. Open this folder in VS Code.
 2. Press `F5` to launch the extension host.
-3. Open a file or terminal editor and click the button in the title bar.
+3. Open a file and use either title bar button.
 
 ## Build VSIX
 

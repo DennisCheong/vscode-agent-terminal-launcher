@@ -5,7 +5,8 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 OUT_DIR="${OUT_DIR:-dist}"
-OUT_FILE="${OUT_FILE:-$OUT_DIR/agent-terminal-launcher.vsix}"
+VERSION="$(node -p "require('./package.json').version")"
+OUT_FILE="${OUT_FILE:-$OUT_DIR/agent-terminal-launcher-$VERSION.vsix}"
 
 mkdir -p "$OUT_DIR"
 

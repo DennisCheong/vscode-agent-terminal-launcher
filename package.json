@@ -2,7 +2,7 @@
   "name": "agent-terminal-launcher",
   "displayName": "Agent Terminal Launcher",
   "description": "One-click button that opens a right-side terminal and runs a configurable agent CLI.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "local",
   "repository": {
     "type": "git",
@@ -20,7 +20,12 @@
     "onCommand:agentTerminal.start",
     "onCommand:agentTerminal.manageProfiles",
     "onCommand:agentTerminal.refSelection",
-    "onCommand:agentTerminal.refFile"
+    "onCommand:agentTerminal.refFile",
+    "onCommand:agentTerminal.showDebugLog"
+  ],
+  "extensionKind": [
+    "ui",
+    "workspace"
   ],
   "main": "./extension.js",
   "scripts": {
@@ -55,23 +60,43 @@
         "title": "Reference Current File",
         "category": "Agent",
         "icon": "$(file-code)"
+      },
+      {
+        "command": "agentTerminal.showDebugLog",
+        "title": "Show Debug Log",
+        "category": "Agent",
+        "icon": "$(output)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "agentTerminal.refSelection",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r",
+        "when": "editorTextFocus && (resourceScheme == file || resourceScheme == vscode-remote)"
+      },
+      {
+        "command": "agentTerminal.refFile",
+        "key": "ctrl+alt+shift+r",
+        "mac": "cmd+alt+shift+r",
+        "when": "editorTextFocus && (resourceScheme == file || resourceScheme == vscode-remote)"
       }
     ],
     "menus": {
       "editor/title": [
         {
           "command": "agentTerminal.start",
-          "when": "resourceScheme == 'file' || resourceScheme == 'untitled' || resourceScheme == 'vscode-terminal'",
+          "when": "resourceScheme == 'file' || resourceScheme == 'vscode-remote' || resourceScheme == 'untitled' || resourceScheme == 'vscode-terminal'",
           "group": "navigation@0"
         },
         {
           "command": "agentTerminal.manageProfiles",
-          "when": "resourceScheme == 'file' || resourceScheme == 'untitled' || resourceScheme == 'vscode-terminal'",
+          "when": "resourceScheme == 'file' || resourceScheme == 'vscode-remote' || resourceScheme == 'untitled' || resourceScheme == 'vscode-terminal'",
           "group": "navigation@1"
         },
         {
           "command": "agentTerminal.refSelection",
-          "when": "resourceScheme == 'file'",
+          "when": "resourceScheme == 'file' || resourceScheme == 'vscode-remote'",
           "group": "navigation@2"
         }
       ]

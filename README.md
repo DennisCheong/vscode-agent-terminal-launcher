@@ -28,14 +28,23 @@ The top settings section controls:
 Profile settings are edited as cards:
 
 - use `New Profile` to create a profile from a popup form
-- edit `name`, `label`, `description`, `command`, `args`, `cwd`, `env`, `terminalName`, and legacy `commandLine` directly inside each profile card
+- edit `name`, `label`, `description`, `command`, `args`, `cwd`, `env`, `terminalName`, `referenceFormat`, and legacy `commandLine` directly inside each profile card
 - use `Save Profile` to save only the card you changed
 - use `Delete Profile` to remove that profile
+
+Debug logging is available from the top settings section:
+
+- enable `Debug Log` when troubleshooting launcher or file reference behavior
+- logs are written to the `Agent Terminal Launcher` Output Channel
+- use `Agent: Show Debug Log` to open the output directly
+- if a keyboard shortcut produces no log entry, VS Code did not invoke the command; check that the keybinding uses `agentTerminal.refSelection` or `agentTerminal.refFile` and that its `when` clause allows `resourceScheme == vscode-remote`
+- keep it disabled during normal use
 
 Keyboard shortcuts are managed by VS Code:
 
 - use the built-in `Keyboard Shortcuts` section to open VS Code's native keybinding UI
-- this extension does not contribute default shortcuts, so reinstalling the VSIX will not reset user keybindings
+- default file reference shortcuts support local and SSH remote files
+- VS Code does not rewrite existing user-defined keybindings during extension updates; if an old custom shortcut still has `resourceScheme == file`, update or remove that custom keybinding manually
 
 ## Profile Fields
 
@@ -47,20 +56,18 @@ Keyboard shortcuts are managed by VS Code:
 - `cwd`: working directory, relative to the workspace if not absolute
 - `env`: environment variables, one `KEY=value` pair per line in the visual editor
 - `terminalName`: optional fixed terminal tab name
+- `referenceFormat`: optional file reference format, either auto detect, `plain`, `opencode`, or `claude`
 - `commandLine`: legacy raw command line for compatibility
 
 ## Referencing Files
 
-- `Agent: Reference Current File or Selection` sends the active file path, or `file#L10-L25` when text is selected, to the currently active terminal. If no terminal is focused, it falls back to the last terminal launched by this extension.
+- `Agent: Reference Current File or Selection` sends the active local or SSH remote file path, or `file#L10-L25` when text is selected, to the currently active terminal. If no terminal is focused, it falls back to the last terminal launched by this extension.
 - `Agent: Reference Current File` always sends the whole active file.
+- opencode profiles use opencode-style references such as `@file#L37-42`, matching opencode's IDE file reference shortcut behavior.
+- Claude Code profiles use Claude Code-style references such as `@file#37-42`, matching Claude Code's IDE file mention behavior.
 - If no agent terminal is open yet, the extension prompts you to start one first.
-- The command sends only the raw reference string. It does not prepend any extra prompt text.
+- The command inserts the reference followed by a space. It does not press Enter or prepend extra prompt text.
 
-## Development
-
-1. Open this folder in VS Code.
-2. Press `F5` to launch the extension host.
-3. Open a file and use either title bar button.
 
 ## Build VSIX
 

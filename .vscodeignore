@@ -5,6 +5,12 @@
 node_modules/**
 dist/**
 *.vsix
+*.bmp
+*.gif
+*.jpeg
+*.jpg
+*.png
+*.webp
 package-lock.json
 npm-shrinkwrap.json
 build.sh

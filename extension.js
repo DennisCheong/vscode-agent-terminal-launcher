@@ -23,6 +23,7 @@ const {
 const { sendEditorReferenceToTerminal } = require('./src/reference');
 const { createProfileManagerHtml } = require('./src/profileManagerHtml');
 const {
+  disposeAllClaudeBridges,
   formatProfileCommand,
   handleTerminalClosed,
   launchProfile
@@ -80,7 +81,16 @@ async function activate(context) {
       return;
     }
 
-    launchProfile(config, selection.profile);
+    try {
+      await launchProfile(config, selection.profile);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      debugLog('Failed to launch profile.', {
+        profile: selection.profile && selection.profile.name,
+        error: message
+      });
+      vscode.window.showErrorMessage(`Agent Terminal: ${message}`);
+    }
   });
 
   const manageProfilesCommand = vscode.commands.registerCommand('agentTerminal.manageProfiles', async () => {
@@ -117,7 +127,7 @@ async function activate(context) {
 async function pickProfile(profiles, activeProfileName) {
   const items = profiles.map((profile) => ({
     label: profile.label || profile.name,
-    description: profile.description || formatProfileCommand(profile),
+    description: formatProfileCommand(profile),
     detail: profile.name === activeProfileName ? 'Active profile' : '',
     picked: profile.name === activeProfileName,
     kind: 'profile',
@@ -334,21 +344,22 @@ async function postProfileManagerState(webview, targetId) {
       debugLogEnabled: readBoolean(config.debugLogEnabled, false),
       profiles: profiles.map((profile) => ({
         name: profile.name,
+        agentType: profile.agentType,
         label: profile.label,
-        description: profile.description,
         command: profile.command,
         args: profile.args,
         cwd: profile.cwd,
-        env: profile.env,
-        terminalName: profile.terminalName,
-        referenceFormat: profile.referenceFormat,
-        commandLine: profile.commandLine
+        env: profile.env
       }))
     }
   });
 }
 
-function deactivate() {}
+function deactivate() {
+  return Promise.allSettled([
+    disposeAllClaudeBridges()
+  ]);
+}
 
 module.exports = {
   activate,

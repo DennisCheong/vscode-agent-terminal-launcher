@@ -9,6 +9,11 @@ const {
   readObject,
   readString
 } = require('./utils');
+const {
+  isBuiltInAgentType,
+  normalizeAgentType,
+  resolveAgentCommand
+} = require('./agentTypes');
 
 let extensionGlobalState = null;
 let extensionWorkspaceState = null;
@@ -50,55 +55,30 @@ function normalizeProfiles(profilesConfig) {
 }
 
 function normalizeProfile(name, value) {
-  if (typeof value === 'string') {
-    const commandLine = value.trim();
-    if (!commandLine) {
-      return null;
-    }
-
-    return {
-      name,
-      label: name,
-      description: '',
-      terminalName: '',
-      commandLine,
-      command: '',
-      args: [],
-      cwd: '',
-      env: {},
-      referenceFormat: ''
-    };
-  }
-
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(`Profile "${name}" must be a string or an object.`);
+    throw new Error(`Profile "${name}" must be an object.`);
   }
 
   const command = readString(value.command, '');
-  const commandLine = readString(value.commandLine, '');
+  const agentType = normalizeAgentType(value.agentType);
   const args = normalizeArgs(value.args, name);
   const env = normalizeEnv(value.env, name);
   const cwd = readString(value.cwd, '');
-  const description = readString(value.description, '');
-  const terminalName = readString(value.terminalName, '');
-  const referenceFormat = normalizeReferenceFormat(value.referenceFormat, name);
   const label = readString(value.label, name) || name;
+  const resolvedCommand = isBuiltInAgentType(agentType) ? resolveAgentCommand(agentType) : command;
 
-  if (!command && !commandLine) {
-    throw new Error(`Profile "${name}" must include either "command" or "commandLine".`);
+  if (!resolvedCommand) {
+    throw new Error(`Profile "${name}" must include "command" for Custom Agent profiles.`);
   }
 
   return {
     name,
+    agentType,
     label,
-    description,
-    terminalName,
-    commandLine,
-    command,
+    command: resolvedCommand,
     args,
     cwd,
-    env,
-    referenceFormat
+    env
   };
 }
 
@@ -241,19 +221,6 @@ function normalizeEnv(value, profileName) {
   return env;
 }
 
-function normalizeReferenceFormat(value, profileName) {
-  const referenceFormat = readString(value, '').toLowerCase();
-  if (!referenceFormat || referenceFormat === 'auto') {
-    return referenceFormat;
-  }
-
-  if (referenceFormat === 'plain' || referenceFormat === 'opencode' || referenceFormat === 'claude') {
-    return referenceFormat;
-  }
-
-  throw new Error(`Profile "${profileName}" field "referenceFormat" must be "auto", "plain", "opencode", or "claude".`);
-}
-
 function normalizeIncomingProfile(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Profile payload is invalid.');
@@ -277,20 +244,18 @@ function serializeProfilesConfig(profiles) {
 
 function serializeProfileConfigValue(profile) {
   const value = {
+    agentType: normalizeAgentType(profile.agentType),
     label: readString(profile.label, profile.name),
-    description: readString(profile.description, ''),
-    command: readString(profile.command, ''),
     args: Array.isArray(profile.args) ? profile.args : [],
     cwd: readString(profile.cwd, ''),
-    env: profile.env && typeof profile.env === 'object' && !Array.isArray(profile.env) ? profile.env : {},
-    terminalName: readString(profile.terminalName, ''),
-    referenceFormat: readString(profile.referenceFormat, '')
+    env: profile.env && typeof profile.env === 'object' && !Array.isArray(profile.env) ? profile.env : {}
   };
 
-  if (profile.commandLine) {
-    value.commandLine = readString(profile.commandLine, '');
+  if (isBuiltInAgentType(value.agentType)) {
+    return value;
   }
 
+  value.command = readString(profile.command, '');
   return value;
 }
 

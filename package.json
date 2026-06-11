@@ -2,7 +2,7 @@
   "name": "agent-terminal-launcher",
   "displayName": "Agent Terminal Launcher",
   "description": "One-click button that opens a right-side terminal and runs a configurable agent CLI.",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publisher": "local",
   "repository": {
     "type": "git",
@@ -24,8 +24,8 @@
     "onCommand:agentTerminal.showDebugLog"
   ],
   "extensionKind": [
-    "ui",
-    "workspace"
+    "workspace",
+    "ui"
   ],
   "main": "./extension.js",
   "scripts": {
@@ -73,13 +73,13 @@
         "command": "agentTerminal.refSelection",
         "key": "ctrl+alt+r",
         "mac": "cmd+alt+r",
-        "when": "editorTextFocus && (resourceScheme == file || resourceScheme == vscode-remote)"
+        "when": "resourceScheme == file || resourceScheme == vscode-remote"
       },
       {
         "command": "agentTerminal.refFile",
         "key": "ctrl+alt+shift+r",
         "mac": "cmd+alt+shift+r",
-        "when": "editorTextFocus && (resourceScheme == file || resourceScheme == vscode-remote)"
+        "when": "resourceScheme == file || resourceScheme == vscode-remote"
       }
     ],
     "menus": {

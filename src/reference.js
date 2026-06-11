@@ -7,34 +7,39 @@ const {
   summarizeWorkspaceFolder
 } = require('./debug');
 const {
+  appendPromptToOpenCodeTerminal,
   resolveReferenceTerminal,
-  resolveTerminalReferenceFormat
+  resolveTerminalReferenceFormat,
+  sendAtMentionToClaudeTerminal
 } = require('./terminal');
 
 async function sendEditorReferenceToTerminal(options) {
   debugLog('Reference command invoked.', {
     forceWholeFile: Boolean(options && options.forceWholeFile),
     activeTerminal: summarizeTerminal(vscode.window.activeTerminal),
-    visibleTerminalCount: vscode.window.terminals.length
+    visibleTerminalCount: vscode.window.terminals.length,
+    activeTab: summarizeActiveTab()
   });
 
-  const activeEditor = vscode.window.activeTextEditor;
-  if (!activeEditor) {
-    debugLog('Reference command stopped: no active text editor.');
+  const referenceSource = getActiveReferenceSource();
+  if (!referenceSource) {
+    debugLog('Reference command stopped: no active referenceable editor or tab.');
     vscode.window.showErrorMessage('Agent Terminal: Open a file before sending a reference.');
     return;
   }
 
-  const documentUri = activeEditor.document.uri;
-  debugLog('Active editor resolved.', {
+  const documentUri = referenceSource.uri;
+  debugLog('Reference source resolved.', {
+    kind: referenceSource.kind,
     uri: documentUri.toString(),
     scheme: documentUri.scheme,
     authority: documentUri.authority,
     path: documentUri.path,
     fsPath: documentUri.fsPath,
-    languageId: activeEditor.document.languageId,
-    isUntitled: activeEditor.document.isUntitled,
-    selection: summarizeSelection(activeEditor.selection),
+    languageId: referenceSource.languageId || '',
+    isUntitled: Boolean(referenceSource.isUntitled),
+    isImage: isImageUri(documentUri),
+    selection: summarizeSelection(referenceSource.selection),
     workspaceFolder: summarizeWorkspaceFolder(vscode.workspace.getWorkspaceFolder(documentUri))
   });
 
@@ -63,7 +68,7 @@ async function sendEditorReferenceToTerminal(options) {
   }
 
   const referenceFormat = resolveTerminalReferenceFormat(targetTerminal);
-  const reference = buildEditorReference(activeEditor, {
+  const reference = buildEditorReference(referenceSource, {
     ...options,
     referenceFormat
   });
@@ -73,15 +78,46 @@ async function sendEditorReferenceToTerminal(options) {
     referenceFormat,
     submit: false
   });
+
+  if (referenceFormat === 'opencode') {
+    targetTerminal.show();
+    const appended = await appendPromptToOpenCodeTerminal(targetTerminal, `${reference} `);
+    if (appended) {
+      debugLog('Reference sent through opencode bridge.');
+      return;
+    }
+  }
+
+  if (referenceFormat === 'claude') {
+    targetTerminal.show();
+    const sent = await sendAtMentionToClaudeTerminal(
+      targetTerminal,
+      buildClaudeAtMentionPayload(referenceSource, options)
+    );
+    if (sent) {
+      debugLog('Reference sent through Claude Code bridge.');
+      return;
+    }
+  }
+
+  if (referenceFormat === 'codex') {
+    debugLog('Codex reference will be inserted through terminal input.');
+  }
+
   targetTerminal.show();
   targetTerminal.sendText(`${reference} `, false);
+  debugLog('Reference inserted through terminal input.', {
+    terminal: summarizeTerminal(targetTerminal),
+    reference,
+    referenceFormat
+  });
 }
 
-function buildEditorReference(activeEditor, options) {
-  const forceWholeFile = Boolean(options && options.forceWholeFile);
+function buildEditorReference(referenceSource, options) {
+  const forceWholeFile = Boolean((options && options.forceWholeFile) || referenceSource.forceWholeFile);
   const referenceFormat = normalizeReferenceFormat(options && options.referenceFormat);
-  const displayPath = getEditorReferencePath(activeEditor.document.uri);
-  const selectionInfo = getSelectionInfo(activeEditor.selection, forceWholeFile);
+  const displayPath = getEditorReferencePath(referenceSource.uri);
+  const selectionInfo = getSelectionInfo(referenceSource.selection, forceWholeFile);
 
   if (referenceFormat === 'opencode') {
     return buildOpenCodeReference(displayPath, selectionInfo);
@@ -91,11 +127,15 @@ function buildEditorReference(activeEditor, options) {
     return buildClaudeReference(displayPath, selectionInfo);
   }
 
+  if (referenceFormat === 'codex') {
+    return buildCodexReference(displayPath, selectionInfo);
+  }
+
   return buildPlainReference(displayPath, selectionInfo);
 }
 
 function normalizeReferenceFormat(value) {
-  return value === 'opencode' || value === 'claude' ? value : 'plain';
+  return value === 'opencode' || value === 'claude' || value === 'codex' ? value : 'plain';
 }
 
 function buildPlainReference(displayPath, selectionInfo) {
@@ -134,8 +174,152 @@ function buildClaudeReference(displayPath, selectionInfo) {
   return `@${displayPath}#${selectionInfo.startLine}-${selectionInfo.endLine}`;
 }
 
+function buildCodexReference(displayPath, selectionInfo) {
+  if (!selectionInfo) {
+    return `@${displayPath}`;
+  }
+
+  if (selectionInfo.startLine === selectionInfo.endLine) {
+    return `@${displayPath}#L${selectionInfo.startLine}`;
+  }
+
+  return `@${displayPath}#L${selectionInfo.startLine}-L${selectionInfo.endLine}`;
+}
+
+function isImageUri(uri) {
+  return Boolean(uri) && isImagePath(uri.fsPath || uri.path);
+}
+
+function isImagePath(filePath) {
+  const extension = path.extname(filePath || '').toLowerCase();
+  return [
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.webp',
+    '.bmp'
+  ].includes(extension);
+}
+
+function buildClaudeAtMentionPayload(referenceSource, options) {
+  const selectionInfo = getSelectionInfo(
+    referenceSource.selection,
+    Boolean((options && options.forceWholeFile) || referenceSource.forceWholeFile)
+  );
+  const payload = {
+    filePath: getClaudeAtMentionFilePath(referenceSource.uri)
+  };
+
+  if (selectionInfo) {
+    payload.lineStart = selectionInfo.startLine;
+    payload.lineEnd = selectionInfo.endLine;
+  }
+
+  return payload;
+}
+
+function getClaudeAtMentionFilePath(uri) {
+  if (uri.scheme === 'file') {
+    return uri.fsPath;
+  }
+
+  return uri.path;
+}
+
 function isReferenceableDocumentUri(uri) {
   return uri && (uri.scheme === 'file' || uri.scheme === 'vscode-remote');
+}
+
+function getActiveReferenceSource() {
+  const activeEditor = vscode.window.activeTextEditor;
+  const activeTabUri = getActiveTabUri();
+
+  if (activeEditor && (!activeTabUri || sameUri(activeEditor.document.uri, activeTabUri))) {
+    return {
+      kind: 'textEditor',
+      uri: activeEditor.document.uri,
+      selection: activeEditor.selection,
+      languageId: activeEditor.document.languageId,
+      isUntitled: activeEditor.document.isUntitled,
+      forceWholeFile: false
+    };
+  }
+
+  if (activeTabUri) {
+    return {
+      kind: 'tab',
+      uri: activeTabUri,
+      selection: null,
+      languageId: '',
+      isUntitled: false,
+      forceWholeFile: isImageUri(activeTabUri)
+    };
+  }
+
+  if (activeEditor) {
+    return {
+      kind: 'textEditor',
+      uri: activeEditor.document.uri,
+      selection: activeEditor.selection,
+      languageId: activeEditor.document.languageId,
+      isUntitled: activeEditor.document.isUntitled,
+      forceWholeFile: false
+    };
+  }
+
+  return null;
+}
+
+function getActiveTabUri() {
+  const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
+  if (!activeTab || !activeTab.input) {
+    return null;
+  }
+
+  return getUriFromTabInput(activeTab.input);
+}
+
+function getUriFromTabInput(input) {
+  if (!input || typeof input !== 'object') {
+    return null;
+  }
+
+  if (isVsCodeUri(input.uri)) {
+    return input.uri;
+  }
+
+  if (isVsCodeUri(input.modified)) {
+    return input.modified;
+  }
+
+  if (isVsCodeUri(input.notebook)) {
+    return input.notebook;
+  }
+
+  return null;
+}
+
+function isVsCodeUri(value) {
+  return value instanceof vscode.Uri;
+}
+
+function sameUri(first, second) {
+  return Boolean(first && second && first.toString() === second.toString());
+}
+
+function summarizeActiveTab() {
+  const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
+  if (!activeTab) {
+    return null;
+  }
+
+  const uri = getUriFromTabInput(activeTab.input);
+  return {
+    label: activeTab.label,
+    inputType: activeTab.input && activeTab.input.constructor ? activeTab.input.constructor.name : '',
+    uri: uri ? uri.toString() : ''
+  };
 }
 
 function getEditorReferencePath(uri) {

@@ -2,43 +2,75 @@ const path = require('path');
 const vscode = require('vscode');
 const { UNLOCK_EDITOR_GROUP_COMMAND } = require('./constants');
 const { debugLog, summarizeTerminal } = require('./debug');
+const {
+  appendPromptToOpenCodeTerminal,
+  attachOpenCodeBridge,
+  createOpenCodeBridgeLaunch,
+  forgetOpenCodeBridge
+} = require('./opencodeBridge');
+const {
+  attachClaudeBridge,
+  createClaudeBridgeLaunch,
+  disposeAllClaudeBridges,
+  forgetClaudeBridge,
+  sendAtMentionToClaudeTerminal
+} = require('./claudeBridge');
 const { readString } = require('./utils');
+const {
+  getAgentTypeDefinition,
+  isBuiltInAgentType,
+  resolveAgentCommand,
+  resolveAgentReferenceFormat
+} = require('./agentTypes');
 
 let lastLaunchedTerminal = null;
 const terminalReferenceFormats = new WeakMap();
 
-function launchProfile(config, profile) {
+async function launchProfile(config, profile) {
   const terminalName = resolveTerminalName(config, profile);
+  const referenceFormat = resolveProfileReferenceFormat(profile);
+  const baseArgs = Array.isArray(profile.args) ? profile.args : [];
   const options = {
     name: terminalName,
     location: resolveTerminalLocation()
   };
-
   const resolvedCwd = resolveProfileCwd(profile.cwd);
   if (resolvedCwd) {
     options.cwd = resolvedCwd;
   }
 
-  if (Object.keys(profile.env).length > 0) {
-    options.env = profile.env;
+  const openCodeBridgeLaunch = createOpenCodeBridgeLaunch(profile, referenceFormat);
+  const claudeBridgeLaunch = await createClaudeBridgeLaunch(profile, referenceFormat);
+
+  const env = {
+    ...profile.env,
+    ...(openCodeBridgeLaunch ? openCodeBridgeLaunch.env : {}),
+    ...(claudeBridgeLaunch ? claudeBridgeLaunch.env : {})
+  };
+
+  if (Object.keys(env).length > 0) {
+    options.env = env;
   }
 
   if (profile.command) {
     options.shellPath = profile.command;
-    if (profile.args.length > 0) {
-      options.shellArgs = profile.args;
+    const args = resolveLaunchArgs(profile, openCodeBridgeLaunch);
+    if (args.length > 0) {
+      options.shellArgs = args;
     }
 
     const terminal = vscode.window.createTerminal(options);
-    rememberTerminal(terminal, profile);
+    rememberTerminal(
+      terminal,
+      referenceFormat,
+      openCodeBridgeLaunch,
+      claudeBridgeLaunch
+    );
     showTerminalAndUnlockGroup(terminal);
     return;
   }
 
-  const terminal = vscode.window.createTerminal(options);
-  rememberTerminal(terminal, profile);
-  showTerminalAndUnlockGroup(terminal);
-  terminal.sendText(profile.commandLine, true);
+  throw new Error(`Profile "${profile.name}" does not define a command.`);
 }
 
 function resolveReferenceTerminal() {
@@ -72,11 +104,30 @@ function handleTerminalClosed(terminal) {
   if (terminal === lastLaunchedTerminal) {
     lastLaunchedTerminal = null;
   }
+
+  forgetOpenCodeBridge(terminal);
+  forgetClaudeBridge(terminal);
 }
 
-function rememberTerminal(terminal, profile) {
+function rememberTerminal(terminal, referenceFormat, openCodeBridgeLaunch, claudeBridgeLaunch) {
   lastLaunchedTerminal = terminal;
-  terminalReferenceFormats.set(terminal, resolveProfileReferenceFormat(profile));
+  terminalReferenceFormats.set(terminal, referenceFormat);
+
+  if (openCodeBridgeLaunch && openCodeBridgeLaunch.bridge) {
+    attachOpenCodeBridge(terminal, openCodeBridgeLaunch.bridge);
+  }
+
+  if (claudeBridgeLaunch && claudeBridgeLaunch.bridge) {
+    attachClaudeBridge(terminal, claudeBridgeLaunch.bridge);
+  }
+}
+
+function resolveLaunchArgs(profile, openCodeBridgeLaunch) {
+  if (openCodeBridgeLaunch) {
+    return openCodeBridgeLaunch.args;
+  }
+
+  return profile.args;
 }
 
 function resolveTerminalReferenceFormat(terminal) {
@@ -101,26 +152,8 @@ function resolveTerminalReferenceFormat(terminal) {
 }
 
 function resolveProfileReferenceFormat(profile) {
-  const explicitFormat = readString(profile.referenceFormat, '').toLowerCase();
-  if (explicitFormat === 'plain' || explicitFormat === 'opencode' || explicitFormat === 'claude') {
-    return explicitFormat;
-  }
-
-  const searchableText = [
-    profile.name,
-    profile.label,
-    profile.description,
-    profile.command,
-    profile.commandLine,
-    profile.terminalName
-  ].filter(Boolean).join(' ').toLowerCase();
-
-  if (searchableText.includes('opencode')) {
-    return 'opencode';
-  }
-
-  if (searchableText.includes('claude')) {
-    return 'claude';
+  if (isBuiltInAgentType(profile.agentType)) {
+    return resolveAgentReferenceFormat(profile.agentType);
   }
 
   return 'plain';
@@ -203,11 +236,7 @@ function isTerminalTab(tab) {
 }
 
 function resolveTerminalName(config, profile) {
-  const baseName = readString(profile.terminalName, readString(config.terminalName, 'Agent')) || 'Agent';
-  if (profile.terminalName) {
-    return baseName;
-  }
-
+  const baseName = readString(config.terminalName, 'Agent') || 'Agent';
   return `${baseName} - ${profile.label || profile.name}`;
 }
 
@@ -252,18 +281,27 @@ function resolveCwd() {
 }
 
 function formatProfileCommand(profile) {
-  if (profile.command) {
+  const command = isBuiltInAgentType(profile.agentType)
+    ? resolveAgentCommand(profile.agentType)
+    : profile.command;
+
+  if (command) {
     const args = Array.isArray(profile.args) && profile.args.length > 0 ? ' ' + profile.args.join(' ') : '';
-    return profile.command + args;
+    const agentDefinition = getAgentTypeDefinition(profile.agentType);
+    const prefix = isBuiltInAgentType(profile.agentType) ? `${agentDefinition.label}: ` : '';
+    return prefix + command + args;
   }
 
-  return profile.commandLine || '';
+  return '';
 }
 
 module.exports = {
+  appendPromptToOpenCodeTerminal,
+  disposeAllClaudeBridges,
   formatProfileCommand,
   handleTerminalClosed,
   launchProfile,
   resolveReferenceTerminal,
-  resolveTerminalReferenceFormat
+  resolveTerminalReferenceFormat,
+  sendAtMentionToClaudeTerminal
 };

@@ -537,7 +537,7 @@ function createProfileManagerHtml(webview) {
         <div class="modal-header">
           <div>
             <h2 id="modalTitle">New Profile</h2>
-            <p>Create a launcher profile without editing raw JSON. Required: profile name and either command or commandLine.</p>
+            <p>Create a launcher profile without editing raw JSON. Custom Agent requires a command.</p>
           </div>
           <div class="modal-actions">
             <span class="status" id="modalStatus"></span>
@@ -551,33 +551,24 @@ function createProfileManagerHtml(webview) {
               <input id="modalProfileNameInput" type="text" placeholder="codex">
             </label>
             <label>
+              Agent Type
+              <select id="modalProfileAgentTypeInput">
+                <option value="custom">Custom Agent</option>
+                <option value="codex">Codex</option>
+                <option value="opencode">opencode</option>
+                <option value="claude">Claude Code</option>
+              </select>
+            </label>
+            <label>
               Label
               <input id="modalProfileLabelInput" type="text" placeholder="Codex">
             </label>
           </div>
 
-          <label>
-            Description
-            <input id="modalProfileDescriptionInput" type="text" placeholder="Shown in the launcher dropdown">
-          </label>
-
           <div class="field-grid">
             <label>
               Command
               <input id="modalProfileCommandInput" type="text" placeholder="codex">
-            </label>
-            <label>
-              Terminal Name Override
-              <input id="modalProfileTerminalNameInput" type="text" placeholder="Optional tab name">
-            </label>
-            <label>
-              Reference Format
-              <select id="modalProfileReferenceFormatInput">
-                <option value="">Auto detect</option>
-                <option value="plain">Plain path#L1-L2</option>
-                <option value="opencode">opencode @path#L1-2</option>
-                <option value="claude">Claude Code @path#1-2</option>
-              </select>
             </label>
           </div>
 
@@ -596,12 +587,7 @@ function createProfileManagerHtml(webview) {
             <textarea id="modalProfileEnvInput" placeholder="KEY=value&#10;ANOTHER_KEY=value"></textarea>
           </label>
 
-          <label>
-            Legacy Command Line
-            <input id="modalProfileCommandLineInput" type="text" placeholder="Optional raw command line">
-          </label>
-
-          <p class="hint">Use either <span class="mono">command</span> or <span class="mono">commandLine</span>. When both are present, the launcher uses <span class="mono">command</span>.</p>
+          <p class="hint">Built-in agent types are launched by this extension and automatically use their matching file reference format. Custom Agent uses plain file references.</p>
 
           <div class="inline-actions">
             <button class="primary" id="saveModalProfileButton" type="submit">Create Profile</button>
@@ -638,15 +624,12 @@ function createProfileManagerHtml(webview) {
       const modalStatus = document.getElementById('modalStatus');
       const modalProfileForm = document.getElementById('modalProfileForm');
       const modalProfileNameInput = document.getElementById('modalProfileNameInput');
+      const modalProfileAgentTypeInput = document.getElementById('modalProfileAgentTypeInput');
       const modalProfileLabelInput = document.getElementById('modalProfileLabelInput');
-      const modalProfileDescriptionInput = document.getElementById('modalProfileDescriptionInput');
       const modalProfileCommandInput = document.getElementById('modalProfileCommandInput');
-      const modalProfileTerminalNameInput = document.getElementById('modalProfileTerminalNameInput');
-      const modalProfileReferenceFormatInput = document.getElementById('modalProfileReferenceFormatInput');
       const modalProfileArgsInput = document.getElementById('modalProfileArgsInput');
       const modalProfileCwdInput = document.getElementById('modalProfileCwdInput');
       const modalProfileEnvInput = document.getElementById('modalProfileEnvInput');
-      const modalProfileCommandLineInput = document.getElementById('modalProfileCommandLineInput');
 
       window.addEventListener('message', (event) => {
         const message = event.data;
@@ -739,6 +722,10 @@ function createProfileManagerHtml(webview) {
         }
       });
 
+      modalProfileAgentTypeInput.addEventListener('change', () => {
+        syncModalAgentTypeControls();
+      });
+
       window.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && isCreatingProfile) {
           closeProfileModal();
@@ -754,15 +741,12 @@ function createProfileManagerHtml(webview) {
           originalName: '',
           profile: {
             name: modalProfileNameInput.value.trim(),
+            agentType: modalProfileAgentTypeInput.value,
             label: modalProfileLabelInput.value.trim(),
-            description: modalProfileDescriptionInput.value.trim(),
             command: modalProfileCommandInput.value.trim(),
             args: parseLines(modalProfileArgsInput.value),
             cwd: modalProfileCwdInput.value.trim(),
-            env: parseEnv(modalProfileEnvInput.value),
-            terminalName: modalProfileTerminalNameInput.value.trim(),
-            referenceFormat: modalProfileReferenceFormatInput.value,
-            commandLine: modalProfileCommandLineInput.value.trim()
+            env: parseEnv(modalProfileEnvInput.value)
           }
         });
       });
@@ -849,33 +833,32 @@ function createProfileManagerHtml(webview) {
 
         const identityGrid = createFieldGrid();
         appendInputField(identityGrid, 'Profile Name', 'profileName', profile.name || '', 'codex');
+        appendSelectField(identityGrid, 'Agent Type', 'profileAgentType', normalizeUiAgentType(profile.agentType), getAgentTypeOptions());
         appendInputField(identityGrid, 'Label', 'profileLabel', profile.label || '', 'Codex');
         fields.appendChild(identityGrid);
 
-        appendInputField(fields, 'Description', 'profileDescription', profile.description || '', 'Shown in the launcher dropdown');
-
         const commandGrid = createFieldGrid();
         appendInputField(commandGrid, 'Command', 'profileCommand', profile.command || '', 'codex');
-        appendInputField(commandGrid, 'Terminal Name Override', 'profileTerminalName', profile.terminalName || '', 'Optional tab name');
-        appendSelectField(commandGrid, 'Reference Format', 'profileReferenceFormat', profile.referenceFormat || '', [
-          { value: '', label: 'Auto detect' },
-          { value: 'plain', label: 'Plain path#L1-L2' },
-          { value: 'opencode', label: 'opencode @path#L1-2' },
-          { value: 'claude', label: 'Claude Code @path#1-2' }
-        ]);
         fields.appendChild(commandGrid);
 
         appendTextareaField(fields, 'Args', 'profileArgs', Array.isArray(profile.args) ? profile.args.join('\\n') : '', 'One argument per line');
         appendInputField(fields, 'Working Directory', 'profileCwd', profile.cwd || '', '.');
         appendTextareaField(fields, 'Environment Variables', 'profileEnv', stringifyEnv(profile.env), 'KEY=value\\nANOTHER_KEY=value');
-        appendInputField(fields, 'Legacy Command Line', 'profileCommandLine', profile.commandLine || '', 'Optional raw command line');
 
         const hint = document.createElement('p');
         hint.className = 'hint';
-        hint.textContent = 'Use either command or commandLine. When both are present, the launcher uses command.';
+        hint.textContent = 'Built-in agents manage command and file reference format automatically. Custom Agent uses plain file references.';
         fields.appendChild(hint);
 
         form.appendChild(fields);
+        syncProfileAgentTypeControls(form);
+
+        const agentTypeSelect = form.elements.namedItem('profileAgentType');
+        if (agentTypeSelect) {
+          agentTypeSelect.addEventListener('change', () => {
+            syncProfileAgentTypeControls(form);
+          });
+        }
 
         const footer = document.createElement('div');
         footer.className = 'profile-card-actions';
@@ -982,15 +965,12 @@ function createProfileManagerHtml(webview) {
       function collectProfileFromForm(form) {
         return {
           name: getFormValue(form, 'profileName'),
+          agentType: getFormValue(form, 'profileAgentType') || 'custom',
           label: getFormValue(form, 'profileLabel'),
-          description: getFormValue(form, 'profileDescription'),
           command: getFormValue(form, 'profileCommand'),
           args: parseLines(getFormValue(form, 'profileArgs')),
           cwd: getFormValue(form, 'profileCwd'),
-          env: parseEnv(getFormValue(form, 'profileEnv')),
-          terminalName: getFormValue(form, 'profileTerminalName'),
-          referenceFormat: getFormValue(form, 'profileReferenceFormat'),
-          commandLine: getFormValue(form, 'profileCommandLine')
+          env: parseEnv(getFormValue(form, 'profileEnv'))
         };
       }
 
@@ -1047,6 +1027,8 @@ function createProfileManagerHtml(webview) {
         profileModal.classList.add('open');
         profileModal.setAttribute('aria-hidden', 'false');
         modalProfileForm.reset();
+        modalProfileAgentTypeInput.value = 'custom';
+        syncModalAgentTypeControls();
         setStatus(modalStatus, '', '');
         setStatus(profilesStatus, '', '');
         renderProfileList();
@@ -1077,6 +1059,73 @@ function createProfileManagerHtml(webview) {
 
         element.textContent = message || '';
         element.className = 'status' + (type ? ' ' + type : '');
+      }
+
+      function getAgentTypeOptions() {
+        return [
+          { value: 'custom', label: 'Custom Agent' },
+          { value: 'codex', label: 'Codex' },
+          { value: 'opencode', label: 'opencode' },
+          { value: 'claude', label: 'Claude Code' }
+        ];
+      }
+
+      function normalizeUiAgentType(value) {
+        if (value === 'codex' || value === 'opencode' || value === 'claude') {
+          return value;
+        }
+
+        return 'custom';
+      }
+
+      function isBuiltInUiAgentType(value) {
+        return value === 'codex' || value === 'opencode' || value === 'claude';
+      }
+
+      function getManagedCommand(agentType) {
+        if (agentType === 'codex') {
+          return 'codex';
+        }
+
+        if (agentType === 'opencode') {
+          return 'opencode';
+        }
+
+        if (agentType === 'claude') {
+          return 'claude';
+        }
+
+        return '';
+      }
+
+      function syncModalAgentTypeControls() {
+        syncAgentTypeControls({
+          agentType: modalProfileAgentTypeInput.value,
+          commandInput: modalProfileCommandInput
+        });
+      }
+
+      function syncProfileAgentTypeControls(form) {
+        syncAgentTypeControls({
+          agentType: getFormValue(form, 'profileAgentType') || 'custom',
+          commandInput: form.elements.namedItem('profileCommand')
+        });
+      }
+
+      function syncAgentTypeControls(options) {
+        const agentType = normalizeUiAgentType(options.agentType);
+        const builtIn = isBuiltInUiAgentType(agentType);
+        const managedCommand = getManagedCommand(agentType);
+
+        if (options.commandInput) {
+          if (builtIn) {
+            options.commandInput.value = managedCommand;
+            options.commandInput.placeholder = 'Managed by selected agent type';
+          } else if (!options.commandInput.placeholder || options.commandInput.placeholder === 'Managed by selected agent type') {
+            options.commandInput.placeholder = 'codex';
+          }
+          options.commandInput.disabled = builtIn;
+        }
       }
 
       vscode.postMessage({ type: 'ready' });

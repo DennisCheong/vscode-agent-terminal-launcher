@@ -4,12 +4,13 @@ VS Code extension for launching agent CLIs such as `codex`, `claude`, or `openco
 
 ## What it does
 
-- Launches configurable agent CLI profiles such as `codex`, `claude`, or `opencode` from the editor title bar or Command Palette.
+- Launches built-in Codex, opencode, and Claude Code profiles, or a custom agent command, from the editor title bar or Command Palette.
 - Opens agent sessions in a right-side terminal editor and reuses the existing right-side terminal tab group when possible.
 - Lets you choose a launch profile from a dropdown before starting the terminal.
 - Provides a visual profile manager for editing launcher profiles without hand-editing JSON.
 - Supports separate user-level and workspace-level launcher settings.
 - Sends the current file path or selected line range to an active agent terminal for quick file references.
+- Improves integration with supported agents such as Codex, Claude Code, and opencode when their CLIs are launched from a matching profile.
 
 ## Configuration
 
@@ -28,7 +29,10 @@ The top settings section controls:
 Profile settings are edited as cards:
 
 - use `New Profile` to create a profile from a popup form
-- edit `name`, `label`, `description`, `command`, `args`, `cwd`, `env`, `terminalName`, `referenceFormat`, and legacy `commandLine` directly inside each profile card
+- choose an `agentType`: `Codex`, `opencode`, `Claude Code`, or `Custom Agent`
+- edit `name`, `label`, `command`, `args`, `cwd`, and `env` directly inside each profile card
+- use `Custom Agent` when you want to run your own command
+- built-in agent types are launched by the extension, so their command and file reference format are managed automatically
 - use `Save Profile` to save only the card you changed
 - use `Delete Profile` to remove that profile
 
@@ -49,24 +53,23 @@ Keyboard shortcuts are managed by VS Code:
 ## Profile Fields
 
 - `name`: settings key used for the profile
+- `agentType`: `codex`, `opencode`, `claude`, or `custom`
 - `label`: display name shown in the launcher picker
-- `description`: optional picker description
-- `command`: executable to run directly in the terminal
+- `command`: executable to run directly in the terminal; editable only for `custom`
 - `args`: command arguments, one line per argument in the visual editor
 - `cwd`: working directory, relative to the workspace if not absolute
 - `env`: environment variables, one `KEY=value` pair per line in the visual editor
-- `terminalName`: optional fixed terminal tab name
-- `referenceFormat`: optional file reference format, either auto detect, `plain`, `opencode`, or `claude`
-- `commandLine`: legacy raw command line for compatibility
 
 ## Referencing Files
 
 - `Agent: Reference Current File or Selection` sends the active local or SSH remote file path, or `file#L10-L25` when text is selected, to the currently active terminal. If no terminal is focused, it falls back to the last terminal launched by this extension.
 - `Agent: Reference Current File` always sends the whole active file.
-- opencode profiles use opencode-style references such as `@file#L37-42`, matching opencode's IDE file reference shortcut behavior.
-- Claude Code profiles use Claude Code-style references such as `@file#37-42`, matching Claude Code's IDE file mention behavior.
+- Codex, opencode, and Claude Code profiles use agent-specific text reference formats automatically.
+- Image files are referenced by path, the same as other whole-file references.
+- Custom Agent profiles use plain file references.
 - If no agent terminal is open yet, the extension prompts you to start one first.
-- The command inserts the reference followed by a space. It does not press Enter or prepend extra prompt text.
+- Terminal fallback inserts the reference followed by a space. It does not press Enter or prepend extra prompt text.
+- In SSH Remote windows, install or run this extension in the remote extension host for best agent integration.
 
 
 ## Build VSIX
